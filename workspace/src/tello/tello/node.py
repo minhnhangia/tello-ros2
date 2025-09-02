@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+ROS2 driver for the DJI Tello drone.
+
+This node interfaces with the Tello drone using the djitellopy library,
+exposing control and sensor data through ROS2 topics. It allows for takeoff,
+landing, RC control, and streams video, IMU, battery, and other status data.
+"""
 
 import pprint
 import math
@@ -26,7 +33,20 @@ from ament_index_python.packages import get_package_share_directory
 #
 # Can be configured to be used by multiple drones, publishes, all data collected from the drone and provides control using ROS messages.
 class TelloNode(Node):
+    """
+    Tello ROS2 node class for controlling and receiving data from a Tello drone.
+
+    This class initializes a connection to the drone, sets up ROS2 publishers
+    and subscribers for various data streams and commands, and runs timers
+    to periodically publish sensor data.
+    """
     def __init__(self):
+        """
+        Initialize the TelloNode.
+
+        Declares and retrieves ROS parameters, connects to the Tello drone,
+        sets up camera and ROS interfaces, and starts timers for data publishing.
+        """
         super().__init__('tello')
 
         # Declare parameters
@@ -62,7 +82,7 @@ class TelloNode(Node):
         self.setup_publishers()
         self.setup_subscribers()
 
-        # Processing threads
+        # Start timers for periodic data publishing
         self.video_timer = self.create_timer(1.0/10.0, self.cb_video_timer)     # 10 Hz
         self.odom_timer = self.create_timer(1.0/10.0, self.cb_odom_timer)       # 10 Hz
         self.status_timer = self.create_timer(1.0/2.0, self.cb_status_timer)    # 2 Hz
@@ -70,12 +90,14 @@ class TelloNode(Node):
         self.get_logger().info('Tello: Driver node ready')
 
     def setup_camera(self):
-        # OpenCV bridge
+        """
+        Initialize camera-related objects and load calibration data.
+        
+        This method sets up the CvBridge for converting image formats and
+        loads the camera calibration data from a specified YAML file.
+        """        
         self.bridge = CvBridge()
-
         self.frame_reader = None
-
-        # Camera information loaded from calibration yaml
         self.camera_info = None
 
         # Check if camera info file was received as argument
@@ -88,8 +110,10 @@ class TelloNode(Node):
             self.camera_info = yaml.load(file, Loader=yaml.FullLoader)
             # self.get_logger().info('Tello: Camera information YAML' + self.camera_info.__str__())
 
-    # Setup ROS publishers of the node.
     def setup_publishers(self):
+        """
+        Create all necessary ROS publishers for the Tello drone data.
+        """
         self.pub_image_raw = self.create_publisher(Image, 'image_raw', 1)
         self.pub_camera_info = self.create_publisher(CameraInfo, 'camera_info', 1)
         self.pub_status = self.create_publisher(TelloStatus, 'status', 1)
@@ -103,8 +127,10 @@ class TelloNode(Node):
         if self.tf_pub:
             self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
     
-    # Setup the topic subscribers of the node.
     def setup_subscribers(self):
+        """
+        Create all necessary ROS subscribers for Tello drone commands.
+        """
         self.sub_emergency = self.create_subscription(Empty, 'emergency', self.cb_emergency, 1)
         self.sub_takeoff = self.create_subscription(Empty, 'takeoff', self.cb_takeoff, 1)
         self.sub_land = self.create_subscription(Empty, 'land', self.cb_land, 1)
@@ -112,8 +138,16 @@ class TelloNode(Node):
         self.sub_flip = self.create_subscription(String, 'flip', self.cb_flip, 1)
         self.sub_wifi_config = self.create_subscription(TelloWifiConfig, 'wifi_config', self.cb_wifi_config, 1)
 
-    # Get the orientation of the drone as a quaternion
     def get_orientation_quaternion(self):
+        """
+        Get the drone's orientation as a quaternion.
+
+        Retrieves yaw, pitch, and roll from the drone, converts them to radians,
+        and then computes the corresponding quaternion.
+
+        Returns:
+            list: A list [qx, qy, qz, qw] representing the orientation quaternion.
+        """
         deg_to_rad = math.pi / 180.0
         return euler_to_quaternion([
             self.tello.get_yaw() * deg_to_rad,
@@ -121,8 +155,14 @@ class TelloNode(Node):
             self.tello.get_roll() * deg_to_rad
         ])
 
-    # Drone status callback, called by a timer
     def cb_status_timer(self):
+        """
+        Timer callback to periodically publish the drone's status.
+
+        This method is called by a timer and publishes various status messages
+        including battery state, temperature, general Tello status, ID info,
+        and camera information.
+        """
         # Battery
         if self.pub_battery.get_subscription_count() > 0:
             msg = BatteryState()
@@ -192,8 +232,12 @@ class TelloNode(Node):
             msg.P = self.camera_info['projection_matrix']['data']
             self.pub_camera_info.publish(msg)
 
-    # Drone odom callback, called by a timer
     def cb_odom_timer(self):
+        """
+        Timer callback to periodically publish odometry and IMU data.
+
+        This function also broadcasts the drone's transform if enabled.
+        """
         # TF
         if self.tf_pub:
             t = TransformStamped()
@@ -237,8 +281,13 @@ class TelloNode(Node):
             odom_msg.twist.twist.linear.z = float(self.tello.get_speed_z()) / 100.0
             self.pub_odom.publish(odom_msg)
 
-    # Video capture callback
     def cb_video_timer(self):
+        """
+        Timer callback to capture and publish video frames.
+
+        This function ensures the video stream is active, reads the latest
+        frame, converts it to a ROS Image message, and publishes it.
+        """
         try:
             # Attempt to start stream if not already started
             if self.frame_reader is None:
@@ -265,22 +314,35 @@ class TelloNode(Node):
             self.get_logger().warning(f"Video callback error: {str(e)}")
                 
     def shutdown(self):
+        """
+        Cleanly shut down the Tello connection.
+        """
         self.get_logger().info('Tello: shutting down')
         try:
             self.tello.end()
         except Exception as e:
             self.get_logger().warning(f"Tello shutdown error: {e}")
 
-    # Stop all movement in the drone
     def cb_emergency(self, msg):
+        """
+        Callback for the emergency stop command. Halts all motors.
+
+        Args:
+            msg (std_msgs.msg.Empty): The received message (content is ignored).
+        """
         try:
             self.tello.emergency()
             self.get_logger().warning('Tello: emergency stop executed!')
         except Exception as e:
             self.get_logger().error(f"Emergency stop failed: {str(e)}")
 
-    # Drone takeoff message control
     def cb_takeoff(self, msg):
+        """
+        Callback to command the drone to take off.
+
+        Args:
+            msg (std_msgs.msg.Empty): The received message (content is ignored).
+        """
         if getattr(self.tello, 'is_flying', False):
             self.get_logger().warning('Tello is already flying!')
             return
@@ -291,8 +353,13 @@ class TelloNode(Node):
         except Exception as e:
             self.get_logger().error(f"Takeoff failed: {str(e)}")
 
-    # Land the drone message callback
     def cb_land(self, msg):
+        """
+        Callback to command the drone to land.
+
+        Args:
+            msg (std_msgs.msg.Empty): The received message (content is ignored).
+        """
         if not getattr(self.tello, 'is_flying', False):
             self.get_logger().warning('Tello has already landed!')
             return
@@ -303,43 +370,67 @@ class TelloNode(Node):
         except Exception as e:
             self.get_logger().error(f"Landing failed: {str(e)}")
         
-
-    # Control messages received use to control the drone "analogically"
-    #
-    # This method of controls allow for more precision in the drone control.
-    #
-    # Receives the linear and angular velocities to be applied from -100 to 100.
     def cb_control(self, msg):
+        """
+        Callback for remote control commands.
+
+        Receives a Twist message and sends the corresponding RC control values
+        to the drone for manual flight control.
+
+        Args:
+            msg (geometry_msgs.msg.Twist): Velocity commands for the drone.
+                Linear x/y/z and angular z are used, expected from -100 to 100.
+        """
         if not getattr(self.tello, 'is_flying', False):
             self.get_logger().warning('Tello is not flying!')
             return
         
         try:
-            self.tello.send_rc_control(int(msg.linear.x),   # TO TEST: might need to swap linear.x and linear.y
-                                    int(msg.linear.y), 
-                                    int(msg.linear.z), 
-                                    int(msg.angular.z))
+            self.tello.send_rc_control(
+                int(msg.linear.x),   # TO TEST: might need to swap linear.x and linear.y
+                int(msg.linear.y), 
+                int(msg.linear.z), 
+                int(msg.angular.z)
+            )
         except Exception as e:
             self.get_logger().warning(f"send_rc_control failed: {e}")        
 
-    # Configure the wifi credential that should be used by the drone.
-    #
-    # The drone will be restarted after the credentials are changed.
     def cb_wifi_config(self, msg):
+        """
+        Callback to configure the drone's Wi-Fi credentials.
+
+        The drone will restart after the credentials are changed.
+
+        Args:
+            msg (tello_msg.msg.TelloWifiConfig): Contains the new SSID and password.
+        """
         try:
             self.tello.set_wifi_credentials(msg.ssid, msg.password)
             self.get_logger().info("Tello: wifi credentials set (drone may restart).")
         except Exception as e:
             self.get_logger().error(f"Failed to set wifi credentials: {e}")
     
-    # Perform a drone flip in a direction specified.
-    # 
-    # Directions can be "r" for right, "l" for left, "f" for forward or "b" for backward.
     def cb_flip(self, msg):
+        """
+        Callback to perform a flip in a specified direction.
+
+        Args:
+            msg (std_msgs.msg.String): The direction to flip.
+                Can be "r" (right), "l" (left), "f" (forward), or "b" (backward).
+        """
         self.tello.flip(msg.data)
 
-# Convert a rotation from euler to quaternion.
+
 def euler_to_quaternion(r):
+    """
+    Convert a rotation from Euler angles to a quaternion.
+
+    Args:
+        r (list): A list [yaw, pitch, roll] in radians.
+
+    Returns:
+        list: The corresponding [qx, qy, qz, qw] quaternion.
+    """
     (yaw, pitch, roll) = (r[0], r[1], r[2])
     qx = math.sin(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) - math.cos(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
     qy = math.cos(roll/2) * math.sin(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.cos(pitch/2) * math.sin(yaw/2)
@@ -347,8 +438,17 @@ def euler_to_quaternion(r):
     qw = math.cos(roll/2) * math.cos(pitch/2) * math.cos(yaw/2) + math.sin(roll/2) * math.sin(pitch/2) * math.sin(yaw/2)
     return [qx, qy, qz, qw]
 
-# Convert rotation from quaternion to euler.
+
 def quaternion_to_euler(q):
+    """
+    Convert a rotation from a quaternion to Euler angles.
+
+    Args:
+        q (list): A list [qx, qy, qz, qw] representing the quaternion.
+
+    Returns:
+        list: The corresponding [yaw, pitch, roll] in radians.
+    """
     (x, y, z, w) = (q[0], q[1], q[2], q[3])
     t0 = +2.0 * (w * x + y * z)
     t1 = +1.0 - 2.0 * (x * x + y * y)
@@ -362,7 +462,11 @@ def quaternion_to_euler(q):
     yaw = math.atan2(t3, t4)
     return [yaw, pitch, roll]
 
+
 def main(args=None):
+    """
+    Main entry point for the Tello ROS2 driver node.
+    """
     rclpy.init(args=args)
 
     node = TelloNode()
@@ -372,6 +476,7 @@ def main(args=None):
     node.shutdown()
     node.destroy_node()
     rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
