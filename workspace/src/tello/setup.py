@@ -8,7 +8,13 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/tello']),
         ('share/tello', ['package.xml', 'resource/ost.txt', 'resource/ost.yaml']),
     ],
-    install_requires=['setuptools'],
+    install_requires=[
+    'setuptools',
+    'av',
+    'djitellopy2',
+    'opencv-python',
+    'pyyaml'
+    ],
     zip_safe=True,
     maintainer='tentone',
     maintainer_email='tentone@outlook.com',
