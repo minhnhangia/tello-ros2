@@ -85,7 +85,7 @@ class TelloControl : public rclcpp::Node
 			publisher_land = this->create_publisher<std_msgs::msg::Empty>("land", 1);
 			publisher_flip = this->create_publisher<std_msgs::msg::String>("flip", 1);
 			publisher_takeoff = this->create_publisher<std_msgs::msg::Empty>("takeoff", 1);
-			publisher_velocity = this->create_publisher<geometry_msgs::msg::Twist>("control", 1);
+			publisher_velocity = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
 			publisher_emergency = this->create_publisher<std_msgs::msg::Empty>("emergency", 1);
 
 			timer = this->create_wall_timer(1ms, std::bind(&TelloControl::timerCallback, this));

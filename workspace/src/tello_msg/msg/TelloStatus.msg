@@ -12,7 +12,7 @@ int32 distance_tof
 uint8 battery
 
 # Time the motors have been active in seconds
-int32 fligth_time
+int32 flight_time
 
 # Highest temperature in celsium
 int32 highest_temperature
