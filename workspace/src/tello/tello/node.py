@@ -73,10 +73,10 @@ class TelloNode(Node):
         Tello.RESPONSE_TIMEOUT = int(self.connect_timeout)
 
         # Connect to drone
-        self.get_logger().info('Tello: Connecting to drone')
+        self.get_logger().info('Tello: Connecting to drone...')
         self.tello = Tello()
         self.tello.connect()
-        self.get_logger().info('Tello: Connected to drone')
+        self.get_logger().info('Tello: Connected to drone!')
 
         # Publishers and subscribers
         self.setup_publishers()
