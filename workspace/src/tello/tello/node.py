@@ -466,16 +466,19 @@ def quaternion_to_euler(q):
 def main(args=None):
     """
     Main entry point for the Tello ROS2 driver node.
+    Ensures safe shutdown on crash or Ctrl+C.
     """
     rclpy.init(args=args)
 
     node = TelloNode()
-
-    rclpy.spin(node)
-
-    node.shutdown()
-    node.destroy_node()
-    rclpy.shutdown()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        node.get_logger().info("KeyboardInterrupt received. Shutting down node.")
+    finally:
+        node.shutdown()
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
