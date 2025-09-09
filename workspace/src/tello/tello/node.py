@@ -226,10 +226,10 @@ class TelloNode(Node):
             msg.height = self.camera_info['image_height']
             msg.width = self.camera_info['image_width']
             msg.distortion_model = self.camera_info['distortion_model']
-            msg.D = self.camera_info['distortion_coefficients']['data']
-            msg.K = self.camera_info['camera_matrix']['data']
-            msg.R = self.camera_info['rectification_matrix']['data']
-            msg.P = self.camera_info['projection_matrix']['data']
+            msg.d = self.camera_info['distortion_coefficients']['data']
+            msg.k = self.camera_info['camera_matrix']['data']
+            msg.r = self.camera_info['rectification_matrix']['data']
+            msg.p = self.camera_info['projection_matrix']['data']
             self.pub_camera_info.publish(msg)
 
     def cb_odom_timer(self):
@@ -343,10 +343,6 @@ class TelloNode(Node):
         Args:
             msg (std_msgs.msg.Empty): The received message (content is ignored).
         """
-        if getattr(self.tello, 'is_flying', False):
-            self.get_logger().warning('Tello is already flying!')
-            return
-        
         try:
             self.tello.takeoff()
             self.get_logger().info('Tello: takeoff successful!')
@@ -360,10 +356,6 @@ class TelloNode(Node):
         Args:
             msg (std_msgs.msg.Empty): The received message (content is ignored).
         """
-        if not getattr(self.tello, 'is_flying', False):
-            self.get_logger().warning('Tello has already landed!')
-            return
-        
         try:
             self.tello.land()
             self.get_logger().info('Tello: landing successful!')
@@ -381,14 +373,10 @@ class TelloNode(Node):
             msg (geometry_msgs.msg.Twist): Velocity commands for the drone.
                 Linear x/y/z and angular z are used, expected from -100 to 100.
         """
-        if not getattr(self.tello, 'is_flying', False):
-            self.get_logger().warning('Tello is not flying!')
-            return
-        
         try:
             self.tello.send_rc_control(
-                int(msg.linear.x),   # TO TEST: might need to swap linear.x and linear.y
-                int(msg.linear.y), 
+                int(msg.linear.y),   # TO TEST: might need to swap linear.x and linear.y
+                int(msg.linear.x), 
                 int(msg.linear.z), 
                 int(msg.angular.z)
             )
@@ -469,7 +457,6 @@ def main(args=None):
     Ensures safe shutdown on crash or Ctrl+C.
     """
     rclpy.init(args=args)
-
     node = TelloNode()
     try:
         rclpy.spin(node)
